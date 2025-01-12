@@ -5,17 +5,14 @@ def start_keyboard():
     # Названия кнопок
     add_cost_button = KeyboardButton(text='Добавить статью трат')
     del_cost_button = KeyboardButton(text='Удалить статью трат')
+    show_last_button = KeyboardButton(text="Последние записи")
     info_button = KeyboardButton(text='Info')
 
-    # Названия кнопок
-    add_cost_button = KeyboardButton(text='Добавить статью трат')
-    del_cost_button = KeyboardButton(text='Удалить статью трат')
-    info_button = KeyboardButton(text='Info')
 
     # создаю объект клавиатуры
     keyboard = ReplyKeyboardMarkup(
         keyboard= [[add_cost_button, del_cost_button],
-                   [info_button]],
+                   [show_last_button, info_button]],
         resize_keyboard=True,
         one_time_keyboard=True
     )
@@ -60,6 +57,17 @@ def date_enter_keyboard():
     keyboard = ReplyKeyboardMarkup(
         keyboard=[[today_date_button, yestoday_date_button],
                   [main_menu_button]],
+        resize_keyboard=True
+    )
+    return keyboard
+
+def return_to_menu_keyboard():
+    # Названия кнопок
+    main_menu_button = KeyboardButton(text="Главное меню")
+
+    # создаю объект клавиатуры
+    keyboard = ReplyKeyboardMarkup(
+        keyboard=[[main_menu_button]],
         resize_keyboard=True
     )
     return keyboard

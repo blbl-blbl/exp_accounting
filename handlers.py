@@ -1,17 +1,19 @@
 import asyncio
 import logging
+
 from aiogram import Bot, Dispatcher
 from aiogram.filters import StateFilter
 from aiogram.filters.command import Command
 from aiogram.fsm.context import FSMContext
 
 from config_reader import config
-from aiogram.types import KeyboardButton, ReplyKeyboardMarkup, Message
-from aiogram.fsm.state import default_state, State, StatesGroup
+from aiogram.types import Message
+from aiogram.fsm.state import default_state
 
+from datetime import datetime, timedelta
 
 import keyboards
-from datebase import User, database_connect
+from database import Operation, database_connect, show_last_records
 from states import FSMFillForm
 
 
@@ -35,9 +37,8 @@ categories = ["авто",
               "услуги",
               "прочее"]
 
-# Подключение к датабазе
-database_connect()
 
+operation_unit = Operation()
 
 # Этот хэндлер будет срабатывать на команду /start вне состояний
 # и предлагать перейти к одному из следующих состояний через выбор кнопки
@@ -78,19 +79,90 @@ async def process_date_sent(message: Message, state: FSMContext):
     category = message.text.lower()
     user_id = message.from_user.id
 
+    # Обновление парметра user_id и cost_category для базы данных
+    operation_unit.user_id = user_id
+    operation_unit.cost_category = category
+
+
     # отправляем пользователю сообщение с клавиатурой
     await message.answer(
-        text="Выбери дату траты или введи вручную в формате dd/mm/yyyy",
+        text="Выбери дату траты или введи вручную в формате ДД.ММ.ГГ",
         reply_markup=keyboards.date_enter_keyboard()
     )
 
     # Устанавливаем состояние ожидания выбора / ввода даты траты
-    await state.set_state(FSMFillForm.add_cost_state)
+    await state.set_state(FSMFillForm.date_cost_state)
 
 
-# Этот хэндлер будет срабатывать, если была введена корректная дата трат
-# @dp.message(StateFilter(FSMFillForm.date_cost_state))
+# Этот хэндлер будет срабатывать, если была выбрана корректная категория трат
+@dp.message(StateFilter(FSMFillForm.date_cost_state))
+async def process_amount_sent(message: Message, state: FSMContext):
+    # Дата, введенная пользователем
+    check_date = message.text
+    try:
+        # Если была нажата кнопка "сегодня" или "вчера"
+        if check_date.lower() == "сегодня":
+            check_date = datetime.now().date().strftime('%d.%m.%y')
 
+        elif check_date.lower() == "вчера":
+            check_date = (datetime.now().date() - timedelta(days=1)).strftime('%d.%m.%y')
+
+        date = datetime.strptime(check_date, '%d.%m.%y')
+
+        # Проверяем корректность введенной даты и чтобы она не превышала
+        # дату сегодняшнего дня
+        if date > datetime.now():
+            await message.answer(text="Введенная дата больше текущей")
+            await state.set_state(FSMFillForm.date_cost_state)
+        # Проверка что введенная дата не меньше текущей на 30 дней
+        elif date < (datetime.now() - timedelta(days=30)):
+            await message.answer(text="Введенная дата не должна быть меньше текущей более "
+                                      "чем на 30 дней")
+            await state.set_state(FSMFillForm.date_cost_state)
+
+        else:
+            await message.answer(text="Введи сумму трат в рублях",
+                                 reply_markup=keyboards.return_to_menu_keyboard())
+            await state.set_state(FSMFillForm.cost_amount_state)
+
+        # Обновление парметра date для базы данных
+        operation_unit.date = datetime.date(date)
+
+    except ValueError:
+        await message.answer(text="Неверный формат даты.\n"
+                                  "Введите дату в формате ДД.ММ.ГГ (только последние цифры года)")
+
+
+
+
+# Этот хэндлер будет срабатывать, если была введена корректная дата
+@dp.message(StateFilter(FSMFillForm.cost_amount_state))
+async def process_finish(message: Message, state: FSMContext):
+    try:
+        amount_input = int(message.text)
+
+        # Обновление парметра cost_amount для базы данных
+        operation_unit.cost_amount = amount_input
+
+        # Добавление записи в базу данных
+        database_connect(operation_unit=operation_unit)
+
+        await message.answer(text="Запись успешно добавлена",
+                             reply_markup=keyboards.start_keyboard())
+        await state.set_state(FSMFillForm.menu_state)
+
+    except:
+        await message.answer(text="Траты должны быть целым числом")
+
+
+@dp.message(StateFilter(FSMFillForm.menu_state),
+            lambda x: x.text.lower() == 'последние записи')
+async def proc_show_last_records(message: Message, state: FSMContext):
+    user_id = message.from_user.id
+    op_counter = 1
+    for op in show_last_records(user_id):
+        await message.answer(text=f"{op_counter}. {op.date.strftime('%d.%m.%y')} : {op.cost_category} : {op.cost_amount} руб.")
+        op_counter += 1
 
 
 # Этот хэндлер будет срабатывать, если введена команда'удалить статью трат' на этапе старта
@@ -128,8 +200,11 @@ async def send_echo(message: Message):
 # ЭТО В MAIN
 # Запускаем бота и пропускаем все накопленные входящие
 async def main():
-    await bot.delete_webhook(drop_pending_updates=True)
-    await dp.start_polling(bot)
+    try:
+        await bot.delete_webhook(drop_pending_updates=True)
+        await dp.start_polling(bot)
+    except:
+        print("Бот остановлен")
 
 asyncio.run(main())
 
