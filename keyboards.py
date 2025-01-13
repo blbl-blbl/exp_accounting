@@ -71,3 +71,23 @@ def return_to_menu_keyboard():
         resize_keyboard=True
     )
     return keyboard
+
+
+def record_number_for_del():
+    # Названия кнопок
+    first = KeyboardButton(text='1')
+    second = KeyboardButton(text="2")
+    third = KeyboardButton(text="3")
+    forth = KeyboardButton(text="4")
+    main_menu_button = KeyboardButton(text="Главное меню")
+
+    # создаю объект клавиатуры
+    keyboard = ReplyKeyboardMarkup(
+        keyboard=[[first, third],
+                  [second, forth],
+                  [main_menu_button]],
+        resize_keyboard=True
+    )
+    return keyboard
+
+

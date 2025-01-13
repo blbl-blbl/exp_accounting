@@ -5,6 +5,7 @@ from aiogram import Bot, Dispatcher
 from aiogram.filters import StateFilter
 from aiogram.filters.command import Command
 from aiogram.fsm.context import FSMContext
+from unicodedata import numeric
 
 from config_reader import config
 from aiogram.types import Message
@@ -13,7 +14,7 @@ from aiogram.fsm.state import default_state
 from datetime import datetime, timedelta
 
 import keyboards
-from database import Operation, database_connect, show_last_records
+from database import Operation, database_connect, show_last_records, del_record
 from states import FSMFillForm
 
 
@@ -160,7 +161,7 @@ async def process_finish(message: Message, state: FSMContext):
 async def proc_show_last_records(message: Message, state: FSMContext):
     user_id = message.from_user.id
     op_counter = 1
-    for op in show_last_records(user_id):
+    for op in show_last_records(user_id=user_id, limit=5):
         await message.answer(text=f"{op_counter}. {op.date.strftime('%d.%m.%y')} : {op.cost_category} : {op.cost_amount} руб.")
         op_counter += 1
 
@@ -171,11 +172,38 @@ async def proc_show_last_records(message: Message, state: FSMContext):
             lambda x: x.text.lower() == 'удалить статью трат')
 async def proc_del_command(message: Message, state: FSMContext):
     await message.answer(
-        text="Выбери какую статью трат необходимо удалить"
+        text="Введи номер траты которую хочешь удалить",
+        reply_markup=keyboards.record_number_for_del()
     )
+
+    user_id = message.from_user.id
+    op_counter = 1
+    for op in show_last_records(user_id=user_id, limit=4):
+        await message.answer(
+            text=f"{op_counter}. {op.date.strftime('%d.%m.%y')} : {op.cost_category} : {op.cost_amount} руб.")
+        op_counter += 1
 
     # Устанавливаем состояние ожидания выбора траты которую хотят удалить
     await state.set_state(FSMFillForm.del_cost_state)
+
+
+# Этот хендлер будет срабатывать при выборе статьи трат, которую хотят удалить
+@dp.message(StateFilter(FSMFillForm.del_cost_state))
+async def proc_rec_for_del_chose(message: Message, state: FSMContext):
+    user_id = message.from_user.id
+    number = message.text
+    try:
+        number = int(number)
+        if number not in range(1, 5):
+            raise ValueError
+        else:
+            operation = show_last_records(user_id=user_id, limit=4)[number - 1]
+            del_record(operation=operation)
+            await message.answer(text="Запись удалена")
+            await state.set_state(FSMFillForm.menu_state)
+    except ValueError:
+        await message.answer(text="Формат ответа в виде числа от 1 до 4")
+        await state.set_state(FSMFillForm.del_cost_state)
 
 
 # Этот хэндлер выдают информацию о боте при запросе 'info'
@@ -183,7 +211,7 @@ async def proc_del_command(message: Message, state: FSMContext):
             lambda x: x.text.lower() == 'info')
 async def proc_info_command(message: Message):
     await message.answer('INFO\nДанный бот создан с целью помочь отслеживать собственные траты. Можешь добавлять сюда'
-                             'все свои расходы, разделенные по категориям, а затем в любое время запросить'
+                             ' свои расходы, разделенные по категориям, а затем в любое время запросить'
                              'сформированный Excel файл для их анализа')
 
 

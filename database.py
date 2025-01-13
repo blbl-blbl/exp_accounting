@@ -44,6 +44,7 @@ def database_connect(operation_unit:Operation):
     with session(bind=engine) as db:
         db.add(operation_unit)
         db.commit()
+        db.close()
 
 
         # # получение всех объектов (Просмотр всей базы данных)
@@ -52,7 +53,8 @@ def database_connect(operation_unit:Operation):
         #     print(f"{op.operation}: {op.user_id}; {op.date}; {op.cost_category}; {op.cost_amount}")
 
 
-def show_last_records(user_id:int):
+# Отображение последних limit записей пользователя
+def show_last_records(user_id:int, limit:int):
     # создание движка
     engine = sqlalchemy.create_engine('sqlite:///database.db')
 
@@ -60,7 +62,24 @@ def show_last_records(user_id:int):
     Base.metadata.create_all(bind=engine)
     session = sessionmaker(bind=engine)
     with session(bind=engine) as db:
-        operations = db.query(Operation).order_by(Operation.date.desc()).filter(Operation.user_id == user_id).limit(5)
+        operations = db.query(Operation).order_by(Operation.date.desc()).filter(Operation.user_id == user_id).limit(limit)
+        db.close()
         return operations
+
+
+
+# Удаление одной из последних 4 записей пользователя
+def del_record(operation):
+    # создание движка
+    engine = sqlalchemy.create_engine('sqlite:///database.db')
+
+    # Подключение к базе данных
+    Base.metadata.create_all(bind=engine)
+    session = sessionmaker(bind=engine)
+    with session(bind=engine) as db:
+        db.delete(operation)
+        db.commit()
+        db.close()
+
 
 
